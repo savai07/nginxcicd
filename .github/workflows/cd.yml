@@ -14,43 +14,42 @@ jobs:
 
     steps:
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.HOST_DNS }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
 
           script: |
             IMAGE=${{ secrets.DOCKER_USERNAME }}/myapp
 
-            echo "Updating Ubuntu..."
-            sudo apt-get update -y
+            echo "Updating packages..."
+            sudo apt update -y
 
-            echo "Installing Docker if not installed..."
-            if ! command -v docker >/dev/null 2>&1
-            then
-              sudo apt-get install -y docker.io
+            echo "Installing Docker..."
+            if ! command -v docker &> /dev/null; then
+              sudo apt install docker.io -y
             fi
 
-            echo "Starting Docker..."
             sudo systemctl enable docker
             sudo systemctl start docker
 
-            echo "Removing old container..."
+            echo "Logging into Docker Hub..."
+            echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+            echo "Stopping old container..."
             sudo docker stop myapp || true
             sudo docker rm myapp || true
-
-            echo "Removing old images..."
-            sudo docker image prune -af
 
             echo "Pulling latest image..."
             sudo docker pull $IMAGE:latest
 
-            echo "Starting new container..."
+            echo "Running new container..."
             sudo docker run -d \
-              --restart always \
               --name myapp \
+              --restart always \
               -p 8080:80 \
               $IMAGE:latest
 
-            echo "Deployment Completed Successfully."
+            echo "Deployment completed successfully."
